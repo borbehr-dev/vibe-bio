@@ -41,7 +41,7 @@
 Нужен [Node.js](https://nodejs.org/) 18 или новее.
 
 ```bash
-git clone <url-вашего-репозитория> vibe-bio
+git clone https://github.com/borbehr-dev/vibe-bio.git
 cd vibe-bio
 npm install
 npm start
