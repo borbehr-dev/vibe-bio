@@ -1,0 +1,17 @@
+# dependencies
+node_modules/
+
+# user data (created automatically on first launch)
+data/profile.json
+
+# uploaded avatars and music (default-avatar.svg is tracked)
+assets/avatar-*
+assets/music-*
+
+# generated static site (build on demand)
+dist/
+
+# logs / os files
+*.log
+.DS_Store
+Thumbs.db

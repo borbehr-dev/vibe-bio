@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="ru" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>vibe.bio — админ-панель</title>
+  <meta name="theme-color" content="#08080c">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%238b5cf6'/%3E%3Cstop offset='1' stop-color='%2322d3ee'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Cpath d='M35 10 18 36h11l-1 18 18-28H35l0-16Z' fill='white'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" referrerpolicy="no-referrer">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body class="min-h-full bg-[#08080c] font-sans text-zinc-200 antialiased">
+
+  <!-- ambient background -->
+  <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
+    <div class="absolute -top-48 left-1/2 h-[30rem] w-[46rem] -translate-x-1/2 rounded-full bg-indigo-600/20 blur-[130px]"></div>
+    <div class="absolute -right-32 bottom-0 h-[26rem] w-[26rem] rounded-full bg-fuchsia-600/10 blur-[130px]"></div>
+    <div class="absolute inset-0 opacity-[0.35]" style="background-image: radial-gradient(rgba(255,255,255,.12) 1px, transparent 1px); background-size: 32px 32px; mask-image: radial-gradient(ellipse at 50% 0%, #000 10%, transparent 70%); -webkit-mask-image: radial-gradient(ellipse at 50% 0%, #000 10%, transparent 70%);"></div>
+  </div>
+
+  <!-- header -->
+  <header class="sticky top-0 z-40 border-b border-white/[0.06] bg-[#08080c]/80 backdrop-blur-xl">
+    <div class="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+      <a href="/" class="flex min-w-0 items-center gap-3" aria-label="vibe.bio — на главную">
+        <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 via-fuchsia-500 to-cyan-400 text-white shadow-lg shadow-fuchsia-500/20">
+          <i class="fa-solid fa-bolt text-sm" aria-hidden="true"></i>
+        </span>
+        <span class="truncate text-[15px] font-semibold tracking-tight text-white">vibe<span class="text-zinc-500">.bio</span></span>
+        <span class="hidden rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.14em] text-zinc-400 sm:inline">open source</span>
+      </a>
+      <div class="flex shrink-0 items-center gap-1.5">
+        <a href="/preview" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">
+          <i class="fa-solid fa-eye" aria-hidden="true"></i>
+          <span class="hidden sm:inline">Превью</span>
+        </a>
+        <a href="/dist/index.html" target="_blank" rel="noopener" data-open-dist class="btn btn-ghost btn-sm <%= distExists ? '' : 'pointer-events-none opacity-40' %>">
+          <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+          <span class="hidden sm:inline">Открыть dist</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto w-full max-w-6xl px-4 pb-32 pt-7 sm:px-6 lg:pt-10">
+    <div class="mb-7 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <p class="eyebrow">Bio-link generator</p>
+        <h1 class="mt-1.5 text-2xl font-semibold tracking-tight text-white sm:text-3xl">Настрой свою страницу</h1>
+        <p class="mt-1.5 max-w-xl text-sm leading-relaxed text-zinc-500">Заполни профиль, выбери оформление и собери статичный сайт одной кнопкой.</p>
+      </div>
+      <span class="chip"><span class="dot" aria-hidden="true"></span>127.0.0.1:9999</span>
+    </div>
+
+    <div class="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+      <form id="profile-form" class="space-y-5" enctype="multipart/form-data" autocomplete="off">
+
+        <!-- 01 profile -->
+        <section class="panel">
+          <div class="mb-5 flex items-start gap-3">
+            <span class="step">01</span>
+            <div>
+              <h2 class="text-sm font-semibold text-white">Профиль</h2>
+              <p class="mt-0.5 text-xs text-zinc-500">Аватар, ник и короткое описание.</p>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div class="flex items-center gap-4">
+              <div class="relative shrink-0">
+                <div id="avatar-box" class="avatar-box">
+                  <img id="avatar-preview" src="<%= avatarUrl %>" alt="Текущий аватар" width="104" height="104">
+                </div>
+                <span id="avatar-badge" class="absolute -right-2 -top-2 hidden rounded-full bg-indigo-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow-lg shadow-indigo-500/30">new</span>
+              </div>
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <label for="avatar-input" class="btn btn-secondary btn-sm cursor-pointer">
+                  <i class="fa-solid fa-arrow-up-from-bracket" aria-hidden="true"></i>
+                  <span>Загрузить</span>
+                </label>
+                <button type="button" id="avatar-remove" class="btn btn-ghost btn-sm <%= profile.avatar ? '' : 'hidden' %>">
+                  <i class="fa-regular fa-trash-can" aria-hidden="true"></i>
+                  <span>Убрать</span>
+                </button>
+                <input id="avatar-input" name="avatar" type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="sr-only">
+              </div>
+              <p class="mt-2 text-xs leading-relaxed text-zinc-500">PNG, JPG, WEBP или GIF · до 5 МБ. Файл сохраняется в <code class="rounded bg-white/5 px-1 py-0.5 font-mono text-[10px] text-zinc-400">assets/</code>.</p>
+              <p id="avatar-filename" class="mt-1 hidden text-xs text-indigo-300"></p>
+            </div>
+          </div>
+
+          <div class="mt-5 border-t border-white/[0.06] pt-5">
+            <label class="label" for="username">Username</label>
+            <div class="relative mt-2">
+              <span class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-zinc-600" aria-hidden="true">@</span>
+              <input id="username" name="username" class="field pl-8" type="text" value="<%= profile.username %>" maxlength="40" required spellcheck="false" placeholder="yourname">
+            </div>
+          </div>
+
+          <div class="mt-4">
+            <div class="flex items-baseline justify-between">
+              <label class="label" for="bio">Bio</label>
+              <span class="font-mono text-[10px] text-zinc-600"><span id="bio-count"><%= profile.bio.length %></span>/300</span>
+            </div>
+            <textarea id="bio" name="bio" class="field mt-2" rows="3" maxlength="300" placeholder="Пара слов о себе, чем занимаешься и куда ведут ссылки…"><%= profile.bio %></textarea>
+          </div>
+        </section>
+
+        <!-- 02 links -->
+        <section class="panel">
+          <div class="mb-5 flex items-start gap-3">
+            <span class="step">02</span>
+            <div>
+              <h2 class="text-sm font-semibold text-white">Ссылки</h2>
+              <p class="mt-0.5 text-xs text-zinc-500">Ссылка целиком или просто ник — разберёмся автоматически.</p>
+            </div>
+          </div>
+
+          <%
+            const socialFields = [
+              { key: 'telegram', label: 'Telegram', icon: 'fa-brands fa-telegram', tint: '#54c2ef', bg: 'rgba(42,169,224,.10)', placeholder: '@username или https://t.me/…' },
+              { key: 'discord', label: 'Discord', icon: 'fa-brands fa-discord', tint: '#8b93ff', bg: 'rgba(88,101,242,.15)', placeholder: 'username или ссылка-приглашение' },
+              { key: 'youtube', label: 'YouTube', icon: 'fa-brands fa-youtube', tint: '#ff6b7a', bg: 'rgba(255,0,51,.10)', placeholder: '@channel или ссылка на канал' },
+              { key: 'tiktok', label: 'TikTok', icon: 'fa-brands fa-tiktok', tint: '#25f4ee', bg: 'rgba(37,244,238,.10)', placeholder: '@username или https://tiktok.com/@…' },
+              { key: 'twitch', label: 'Twitch', icon: 'fa-brands fa-twitch', tint: '#b794ff', bg: 'rgba(145,70,255,.15)', placeholder: 'username или https://twitch.tv/…' },
+              { key: 'steam', label: 'Steam', icon: 'fa-brands fa-steam', tint: '#8bd3ff', bg: 'rgba(102,192,244,.12)', placeholder: 'ссылка на профиль или SteamID64' },
+              { key: 'github', label: 'GitHub', icon: 'fa-brands fa-github', tint: '#e6edf3', bg: 'rgba(255,255,255,.08)', placeholder: 'username или https://github.com/…' },
+              { key: 'spotify', label: 'Spotify', icon: 'fa-brands fa-spotify', tint: '#4ade80', bg: 'rgba(29,185,84,.12)', placeholder: 'ссылка на профиль или Spotify username' },
+            ];
+          %>
+          <div class="space-y-2.5">
+            <% socialFields.forEach((field) => { %>
+              <div class="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 transition-colors focus-within:border-indigo-400/40 focus-within:bg-white/[0.04]">
+                <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg" style="background-color: <%= field.bg %>; color: <%= field.tint %>" aria-hidden="true"><i class="<%= field.icon %>"></i></span>
+                <div class="min-w-0 flex-1">
+                  <label for="<%= field.key %>" class="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500"><%= field.label %></label>
+                  <input id="<%= field.key %>" name="<%= field.key %>" class="w-full border-0 bg-transparent p-0 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-0" type="text" value="<%= profile.links[field.key] || '' %>" maxlength="200" spellcheck="false" placeholder="<%= field.placeholder %>">
+                </div>
+              </div>
+            <% }) %>
+          </div>
+
+          <p class="mt-3 flex items-start gap-2 text-[11px] leading-relaxed text-zinc-600">
+            <i class="fa-solid fa-circle-info mt-0.5 text-indigo-400/70" aria-hidden="true"></i>
+            <span>Если у Discord указан только ник, кнопка на готовой странице будет копировать его в буфер обмена.</span>
+          </p>
+        </section>
+
+        <!-- 03 appearance -->
+        <section class="panel">
+          <div class="mb-5 flex items-start gap-3">
+            <span class="step">03</span>
+            <div>
+              <h2 class="text-sm font-semibold text-white">Оформление</h2>
+              <p class="mt-0.5 text-xs text-zinc-500">Готовые палитры или свои цвета фона и акцента.</p>
+            </div>
+          </div>
+
+          <%
+            const themePresets = [
+              { id: 'cyberpunk', name: 'Cyberpunk', hint: 'тёмный неон', bg: '#12071f', accent: '#d946ef' },
+              { id: 'midnight', name: 'Midnight', hint: 'глубокий синий', bg: '#0a0f1e', accent: '#3b82f6' },
+              { id: 'minimal', name: 'Minimal', hint: 'светлый', bg: '#f5f5f7', accent: '#111827' },
+              { id: 'forest', name: 'Forest', hint: 'зелёный', bg: '#0b1a14', accent: '#22c55e' },
+            ];
+          %>
+          <p class="label mb-2">Пресеты тем</p>
+          <div id="theme-presets" class="theme-grid" role="group" aria-label="Пресеты тем">
+            <% themePresets.forEach((preset) => { %>
+              <button
+                type="button"
+                class="theme-preset"
+                data-theme="<%= preset.id %>"
+                data-bg="<%= preset.bg %>"
+                data-accent="<%= preset.accent %>"
+                style="--preset-bg: <%= preset.bg %>; --preset-accent: <%= preset.accent %>"
+                aria-label="Тема <%= preset.name %>"
+              >
+                <span class="theme-preset__swatch" aria-hidden="true"></span>
+                <span class="theme-preset__text">
+                  <span class="theme-preset__name"><%= preset.name %></span>
+                  <span class="theme-preset__hint"><%= preset.hint %></span>
+                </span>
+              </button>
+            <% }) %>
+          </div>
+
+          <div class="mt-5 grid gap-3 sm:grid-cols-2">
+            <div class="color-row">
+              <label class="color-pill" for="background" title="Выбрать цвет фона">
+                <span id="bg-chip" class="block h-full w-full" style="background-color: <%= profile.background %>"></span>
+                <input id="background" name="background" type="color" value="<%= profile.background %>" aria-label="Цвет фона">
+              </label>
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-zinc-200">Цвет фона</p>
+                <p id="bg-hex" class="font-mono text-xs text-zinc-500"><%= profile.background %></p>
+              </div>
+            </div>
+
+            <div class="color-row">
+              <label class="color-pill" for="accent" title="Выбрать цвет акцента">
+                <span id="accent-chip" class="block h-full w-full" style="background-color: <%= profile.accent %>"></span>
+                <input id="accent" name="accent" type="color" value="<%= profile.accent %>" aria-label="Цвет акцента">
+              </label>
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-zinc-200">Цвет акцента</p>
+                <p id="accent-hex" class="font-mono text-xs text-zinc-500"><%= profile.accent %></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4">
+            <p class="label mb-2">Быстрые цвета фона</p>
+            <div id="swatches" class="flex flex-wrap gap-1.5" role="group" aria-label="Готовые цвета">
+              <% const swatches = ['#0b0b10', '#0a0f1e', '#12071f', '#1a0b14', '#0b1a14', '#1c1408', '#101014', '#1e1b4b', '#0f172a', '#1a1a1a', '#f5f5f7']; %>
+              <% swatches.forEach((color) => { %>
+                <button type="button" class="swatch" style="--swatch: <%= color %>" data-color="<%= color %>" aria-label="Цвет <%= color %>" title="<%= color %>"></button>
+              <% }); %>
+            </div>
+          </div>
+        </section>
+
+        <!-- 04 effects -->
+        <section class="panel">
+          <div class="mb-5 flex items-start gap-3">
+            <span class="step">04</span>
+            <div>
+              <h2 class="text-sm font-semibold text-white">Фишки</h2>
+              <p class="mt-0.5 text-xs text-zinc-500">Музыка, печатная машинка и эффекты при клике.</p>
+            </div>
+          </div>
+
+          <div class="audio-row">
+            <div class="audio-row__icon" aria-hidden="true"><i class="fa-solid fa-music"></i></div>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium text-zinc-200">Фоновая музыка</p>
+              <p id="audio-filename" class="mt-0.5 truncate text-xs text-zinc-500">
+                <%= profile.audio ? profile.audio.split('/').pop() : 'MP3 · до 5 МБ' %>
+              </p>
+              <audio
+                id="audio-preview"
+                class="audio-preview <%= audioUrl ? '' : 'hidden' %>"
+                <% if (audioUrl) { %>src="<%= audioUrl %>"<% } %>
+                controls
+                preload="metadata"
+              ></audio>
+            </div>
+            <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <label for="audio-input" class="btn btn-secondary btn-sm cursor-pointer">
+                <i class="fa-solid fa-arrow-up-from-bracket" aria-hidden="true"></i>
+                <span>Загрузить</span>
+              </label>
+              <button type="button" id="audio-remove" class="btn btn-ghost btn-sm <%= profile.audio ? '' : 'hidden' %>">
+                <i class="fa-regular fa-trash-can" aria-hidden="true"></i>
+                <span>Убрать</span>
+              </button>
+              <input id="audio-input" name="audio" type="file" accept="audio/mpeg,.mp3" class="sr-only">
+            </div>
+          </div>
+
+          <div class="mt-3 flex flex-wrap items-start gap-2 text-[11px] leading-relaxed text-zinc-600">
+            <i class="fa-solid fa-circle-info mt-0.5 text-indigo-400/70" aria-hidden="true"></i>
+            <span>Кнопка Play/Pause появится в правом верхнем углу готовой страницы. На превью трек можно послушать прямо здесь.</span>
+          </div>
+
+          <div class="mt-5 border-t border-white/[0.06] pt-5">
+            <label class="toggle-row" for="typewriter">
+              <span>
+                <span class="block text-sm font-medium text-zinc-200">Эффект печатной машинки</span>
+                <span class="mt-0.5 block text-xs text-zinc-500">Bio печатается по буквам с мигающим курсором.</span>
+              </span>
+              <span class="toggle">
+                <input id="typewriter" name="typewriter" type="checkbox" <%= profile.typewriter ? 'checked' : '' %>>
+                <span class="toggle__track" aria-hidden="true"><span class="toggle__thumb"></span></span>
+              </span>
+            </label>
+          </div>
+
+          <div class="mt-4">
+            <p class="label mb-2">Эффект при клике</p>
+            <div class="choice-grid" role="group" aria-label="Эффект при клике">
+              <% const particleOptions = [
+                { value: 'hearts', label: 'Сердечки', hint: 'красные', icon: 'fa-solid fa-heart' },
+                { value: 'snow', label: 'Снежинки', hint: 'белые', icon: 'fa-solid fa-snowflake' },
+                { value: 'neon', label: 'Неон', hint: 'фиолетовый', icon: 'fa-solid fa-wand-magic-sparkles' },
+                { value: 'off', label: 'Выключено', hint: 'без эффекта', icon: 'fa-solid fa-ban' },
+              ]; %>
+              <% particleOptions.forEach((option) => { %>
+                <label class="choice">
+                  <input type="radio" name="particles" value="<%= option.value %>" <%= profile.particles === option.value ? 'checked' : '' %>>
+                  <span class="choice__body">
+                    <i class="<%= option.icon %>" aria-hidden="true"></i>
+                    <span class="min-w-0">
+                      <span class="block text-[13px] font-medium"><%= option.label %></span>
+                      <span class="block text-[10px] text-zinc-500"><%= option.hint %></span>
+                    </span>
+                  </span>
+                </label>
+              <% }) %>
+            </div>
+          </div>
+        </section>
+      </form>
+
+      <!-- sidebar -->
+      <aside class="space-y-5 lg:sticky lg:top-24 lg:self-start">
+        <section class="panel">
+          <div class="mb-4 flex items-center justify-between">
+            <div class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+              <i class="fa-solid fa-eye text-[11px]" aria-hidden="true"></i>
+              <span>Живое превью</span>
+            </div>
+            <a href="/preview" target="_blank" rel="noopener" class="text-xs text-indigo-300 transition-colors hover:text-indigo-200">
+              Открыть <i class="fa-solid fa-arrow-up-right-from-square ml-0.5 text-[9px]" aria-hidden="true"></i>
+            </a>
+          </div>
+
+          <div id="preview-bg" class="relative overflow-hidden rounded-2xl border border-white/10 px-5 py-7 text-center" style="background-color: <%= profile.background %>; --accent: <%= profile.accent %>">
+            <div class="pointer-events-none absolute inset-0" aria-hidden="true" style="background: radial-gradient(circle at 18% 12%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 55%), radial-gradient(circle at 85% 88%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 60%);"></div>
+            <div class="relative">
+              <img id="preview-avatar" src="<%= avatarUrl %>" alt="" width="80" height="80" class="mx-auto h-20 w-20 rounded-full border-2 border-white/80 bg-[#15151c] object-cover shadow-xl shadow-black/40">
+              <p id="preview-name" class="mt-3 break-words text-lg font-semibold leading-tight text-white"><%= profile.username %></p>
+              <p id="preview-bio" class="mt-1.5 whitespace-pre-line break-words text-xs leading-relaxed text-white/60"><%= profile.bio %></p>
+              <div id="preview-links" class="mt-4 space-y-2"></div>
+              <div id="preview-footer" class="mt-5 flex items-center justify-center gap-1.5 border-t border-white/10 pt-3 text-[9px] uppercase tracking-[0.18em] text-white/35">
+                <i class="fa-solid fa-bolt text-[8px]" aria-hidden="true"></i>
+                <span>vibe.bio</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+            <i class="fa-solid fa-hammer text-[11px]" aria-hidden="true"></i>
+            <span>Сборка</span>
+          </div>
+
+          <div class="mt-4 rounded-xl border border-white/[0.06] bg-black/25 p-4 font-mono text-xs leading-relaxed text-zinc-400">
+            <p><i class="fa-regular fa-folder-open text-amber-300/80" aria-hidden="true"></i> dist/</p>
+            <p class="pl-4"><i class="fa-regular fa-file-code text-sky-300/80" aria-hidden="true"></i> index.html</p>
+            <p class="pl-4"><i class="fa-brands fa-css3-alt text-blue-400/80" aria-hidden="true"></i> style.css</p>
+            <p class="pl-4"><i class="fa-brands fa-js text-yellow-300/80" aria-hidden="true"></i> script.js</p>
+            <p class="pl-4"><i class="fa-regular fa-folder text-amber-300/80" aria-hidden="true"></i> assets/</p>
+            <p class="pl-9 text-zinc-600"><%= profile.avatar ? profile.avatar.split('/').pop() : 'default-avatar.svg' %></p>
+            <% if (profile.audio) { %>
+              <p class="pl-9 text-zinc-600"><%= profile.audio.split('/').pop() %></p>
+            <% } %>
+          </div>
+
+          <p class="mt-3 text-[11px] leading-relaxed text-zinc-500">
+            Кнопка «Собрать проект» сначала сохраняет профиль, затем пересобирает <code class="rounded bg-white/5 px-1 font-mono text-[10px]">dist/</code> с нуля. Готовую папку можно сразу заливать на GitHub Pages или Cloudflare Pages.
+          </p>
+
+          <div class="mt-4 flex items-center justify-between border-t border-white/[0.06] pt-3.5 text-xs">
+            <span class="text-zinc-500">Последняя сборка</span>
+            <span id="built-at" class="text-right text-zinc-300"><%= builtAt || 'ещё не было' %></span>
+          </div>
+
+          <a href="/dist/index.html" target="_blank" rel="noopener" data-open-dist class="btn btn-secondary btn-sm mt-3 w-full <%= distExists ? '' : 'pointer-events-none opacity-40' %>">
+            <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+            <span>Открыть готовую страницу</span>
+          </a>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <!-- sticky action bar -->
+  <div class="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.07] bg-[#08080c]/85 backdrop-blur-xl">
+    <div class="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+      <div id="save-state" class="hidden items-center gap-2 text-xs text-zinc-500 sm:flex">
+        <span id="save-dot" class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+        <span id="save-state-text">Все изменения сохранены</span>
+      </div>
+      <div class="flex flex-1 items-center justify-end gap-2.5">
+        <button type="button" id="btn-save" class="btn btn-secondary">
+          <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+          <span>Сохранить</span>
+        </button>
+        <button type="button" id="btn-build" class="btn btn-primary">
+          <i class="fa-solid fa-hammer" aria-hidden="true"></i>
+          <span>Собрать проект</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite">
+    <i id="toast-icon" class="fa-solid fa-circle-check" aria-hidden="true"></i>
+    <span id="toast-text"></span>
+  </div>
+
+  <script src="/static/admin.js" defer></script>
+</body>
+</html>
