@@ -5,7 +5,20 @@ const path = require('node:path');
 const express = require('express');
 const multer = require('multer');
 
-const { loadProfile, saveProfile, ValidationError } = require('./lib/store');
+const {
+  AVATAR_SHAPES,
+  CARD_STYLES,
+  CURSORS,
+  FONTS,
+  ICON_STYLES,
+  PARTICLE_EFFECTS,
+  SOCIAL_STYLES,
+  ValidationError,
+  getViews,
+  incrementViews,
+  loadProfile,
+  saveProfile,
+} = require('./lib/store');
 const { buildSite, DIST_DIR } = require('./lib/build');
 const { CSS, SCRIPT_PATH, renderPage } = require('./lib/render');
 
@@ -17,12 +30,14 @@ const ASSETS_DIR = path.join(ROOT, 'assets');
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const DIST_INDEX = path.join(DIST_DIR, 'index.html');
 
+const MB = 1024 * 1024;
+
 fs.mkdirSync(ASSETS_DIR, { recursive: true });
 fs.mkdirSync(PUBLIC_DIR, { recursive: true });
 
 /* ---------------------------- file uploads ----------------------------- */
 
-const MIME_EXTENSIONS = new Map([
+const IMAGE_MIME_EXTENSIONS = new Map([
   ['image/jpeg', '.jpg'],
   ['image/jpg', '.jpg'],
   ['image/png', '.png'],
@@ -35,25 +50,40 @@ const AUDIO_MIME_TYPES = new Set([
   'audio/mp3',
   'audio/mpeg3',
   'audio/x-mpeg',
-  'audio/x-mp3',
 ]);
+
+const FIELD_PREFIXES = Object.freeze({
+  avatar: 'avatar',
+  background: 'bg',
+  cover: 'cover',
+});
+
+const FIELD_LIMITS = Object.freeze({
+  avatar: 5 * MB,
+  background: 10 * MB,
+  audio: 10 * MB,
+  cover: 5 * MB,
+});
 
 const storage = multer.diskStorage({
   destination: (req, file, callback) => callback(null, ASSETS_DIR),
   filename: (req, file, callback) => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
     if (file.fieldname === 'audio') {
-      callback(null, `music-${Date.now()}.mp3`);
+      callback(null, `music-${suffix}.mp3`);
       return;
     }
 
-    const extension = MIME_EXTENSIONS.get(file.mimetype) || '.png';
-    callback(null, `avatar-${Date.now()}${extension}`);
+    const extension = IMAGE_MIME_EXTENSIONS.get(file.mimetype) || '.png';
+    const prefix = FIELD_PREFIXES[file.fieldname] || 'file';
+    callback(null, `${prefix}-${suffix}${extension}`);
   },
 });
 
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024, files: 2 },
+  limits: { fileSize: 12 * MB, files: 4 },
   fileFilter: (req, file, callback) => {
     if (file.fieldname === 'audio') {
       const genericMp3 =
@@ -71,7 +101,7 @@ const upload = multer({
       return;
     }
 
-    if (!MIME_EXTENSIONS.has(file.mimetype)) {
+    if (!IMAGE_MIME_EXTENSIONS.has(file.mimetype)) {
       const error = new Error('Поддерживаются только PNG, JPG, WEBP и GIF.');
       error.code = 'INVALID_FILE_TYPE';
       callback(error);
@@ -84,12 +114,32 @@ const upload = multer({
 
 const profileUpload = upload.fields([
   { name: 'avatar', maxCount: 1 },
+  { name: 'background', maxCount: 1 },
   { name: 'audio', maxCount: 1 },
+  { name: 'cover', maxCount: 1 },
 ]);
 
 function uploadedFile(req, field) {
   const files = req.files && req.files[field];
   return Array.isArray(files) && files[0] ? files[0] : null;
+}
+
+function uploadedFileList(req) {
+  if (!req.files) return [];
+  return Object.values(req.files).flat();
+}
+
+function validateUploadedSizes(req) {
+  for (const [field, limit] of Object.entries(FIELD_LIMITS)) {
+    const file = uploadedFile(req, field);
+    if (!file) continue;
+
+    if (file.size > limit) {
+      throw new ValidationError(
+        `Файл «${file.originalname}» слишком большой. Максимум — ${Math.round(limit / MB)} МБ.`,
+      );
+    }
+  }
 }
 
 function removeManagedAsset(storedPath, fileNamePattern) {
@@ -112,8 +162,16 @@ function removeUploadedAvatar(avatarPath) {
   removeManagedAsset(avatarPath, /^avatar-[a-z0-9._-]+$/i);
 }
 
+function removeUploadedBackground(backgroundPath) {
+  removeManagedAsset(backgroundPath, /^bg-[a-z0-9._-]+$/i);
+}
+
 function removeUploadedAudio(audioPath) {
   removeManagedAsset(audioPath, /^music-[a-z0-9._-]+\.mp3$/i);
+}
+
+function removeUploadedCover(coverPath) {
+  removeManagedAsset(coverPath, /^cover-[a-z0-9._-]+$/i);
 }
 
 function assetUrlFor(storedPath, fallback = '') {
@@ -134,6 +192,10 @@ function avatarUrlFor(profile) {
   return assetUrlFor(profile.avatar, '/assets/default-avatar.svg');
 }
 
+function backgroundUrlFor(profile) {
+  return assetUrlFor(profile.backgroundImage, '');
+}
+
 function audioUrlFor(profile) {
   if (!profile.audio) return '';
 
@@ -141,6 +203,10 @@ function audioUrlFor(profile) {
   if (!/\.mp3$/i.test(fileName)) return '';
 
   return assetUrlFor(profile.audio, '');
+}
+
+function coverUrlFor(profile) {
+  return assetUrlFor(profile.audioCover, '');
 }
 
 function builtAtFor() {
@@ -153,6 +219,22 @@ function builtAtFor() {
   } catch {
     return null;
   }
+}
+
+function parseCustomLinks(raw) {
+  if (raw === undefined) return undefined;
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function sanitizeViewUsername(value) {
+  const username = String(value || '').trim().toLowerCase();
+  return /^[a-z0-9._-]{1,40}$/.test(username) ? username : '';
 }
 
 /* --------------------------------- app ---------------------------------- */
@@ -174,9 +256,18 @@ app.get('/', (req, res, next) => {
     res.render('admin', {
       profile,
       avatarUrl: avatarUrlFor(profile),
+      backgroundUrl: backgroundUrlFor(profile),
       audioUrl: audioUrlFor(profile),
+      coverUrl: coverUrlFor(profile),
       distExists: fs.existsSync(DIST_INDEX),
       builtAt: builtAtFor(),
+      fonts: Object.entries(FONTS).map(([id, font]) => ({ id, ...font })),
+      avatarShapes: AVATAR_SHAPES,
+      cardStyles: CARD_STYLES,
+      socialStyles: SOCIAL_STYLES,
+      iconStyles: ICON_STYLES,
+      cursors: CURSORS,
+      particleEffects: PARTICLE_EFFECTS,
     });
   } catch (error) {
     next(error);
@@ -190,7 +281,11 @@ app.get('/preview', (req, res, next) => {
       cssHref: '/preview/style.css',
       scriptHref: '/preview/script.js',
       avatarSrc: avatarUrlFor(profile),
+      backgroundImageSrc: backgroundUrlFor(profile),
       audioSrc: audioUrlFor(profile),
+      audioCoverSrc: coverUrlFor(profile),
+      viewsEndpoint: '/api/views',
+      presenceEndpoint: '/api/discord',
     });
     res.type('html').send(html);
   } catch (error) {
@@ -208,50 +303,103 @@ app.get('/preview/script.js', (req, res) => {
 
 app.post('/api/save', profileUpload, (req, res, next) => {
   const avatarFile = uploadedFile(req, 'avatar');
+  const backgroundFile = uploadedFile(req, 'background');
   const audioFile = uploadedFile(req, 'audio');
-  const uploadedPaths = [avatarFile, audioFile]
-    .filter(Boolean)
-    .map((file) => path.join(ASSETS_DIR, file.filename));
+  const coverFile = uploadedFile(req, 'cover');
+  const uploadedPaths = uploadedFileList(req).map((file) =>
+    path.join(ASSETS_DIR, file.filename),
+  );
 
   try {
+    validateUploadedSizes(req);
+
     const previous = loadProfile();
+    const body = req.body || {};
 
     const profile = saveProfile({
-      username: req.body.username,
-      bio: req.body.bio,
-      background: req.body.background,
-      accent: req.body.accent,
-      typewriter: req.body.typewriter === 'on',
-      ...(req.body.particles !== undefined
-        ? { particles: req.body.particles }
-        : {}),
+      username: body.username,
+      displayName: body.displayName,
+      bio: body.bio,
+      background: body.background,
+      accent: body.accent,
+      textColor: body.textColor,
+      font: body.font,
+      avatarShape: body.avatarShape,
+      cardStyle: body.cardStyle,
+      cardOpacity: body.cardOpacity,
+      cardBlur: body.cardBlur,
+      socialStyle: body.socialStyle,
+      iconStyle: body.iconStyle,
+      typewriter:
+        body.typewriter !== undefined ? body.typewriter === 'on' : undefined,
+      particles: body.particles,
+      cursor: body.cursor,
+      showViews:
+        body.showViews !== undefined ? body.showViews === 'on' : undefined,
+      showClock:
+        body.showClock !== undefined ? body.showClock === 'on' : undefined,
+      showShare:
+        body.showShare !== undefined ? body.showShare === 'on' : undefined,
+      showDiscord:
+        body.showDiscord !== undefined ? body.showDiscord === 'on' : undefined,
+      discordId: body.discordId,
+      badges: body.badges,
+      audioTitle: body.audioTitle,
+      audioArtist: body.audioArtist,
+      customLinks: parseCustomLinks(body.customLinks),
       links: {
-        telegram: req.body.telegram,
-        discord: req.body.discord,
-        youtube: req.body.youtube,
-        tiktok: req.body.tiktok,
-        twitch: req.body.twitch,
-        steam: req.body.steam,
-        github: req.body.github,
-        spotify: req.body.spotify,
+        telegram: body.telegram,
+        discord: body.discord,
+        youtube: body.youtube,
+        tiktok: body.tiktok,
+        twitch: body.twitch,
+        steam: body.steam,
+        github: body.github,
+        spotify: body.spotify,
+        x: body.x,
+        instagram: body.instagram,
+        vk: body.vk,
+        reddit: body.reddit,
+        roblox: body.roblox,
+        website: body.website,
+        email: body.email,
       },
       ...(avatarFile ? { avatar: `/assets/${avatarFile.filename}` } : {}),
+      ...(backgroundFile
+        ? { backgroundImage: `/assets/${backgroundFile.filename}` }
+        : {}),
       ...(audioFile ? { audio: `/assets/${audioFile.filename}` } : {}),
+      ...(coverFile ? { audioCover: `/assets/${coverFile.filename}` } : {}),
     });
 
     if (avatarFile && previous.avatar && previous.avatar !== profile.avatar) {
       removeUploadedAvatar(previous.avatar);
     }
-
+    if (
+      backgroundFile &&
+      previous.backgroundImage &&
+      previous.backgroundImage !== profile.backgroundImage
+    ) {
+      removeUploadedBackground(previous.backgroundImage);
+    }
     if (audioFile && previous.audio && previous.audio !== profile.audio) {
       removeUploadedAudio(previous.audio);
+    }
+    if (
+      coverFile &&
+      previous.audioCover &&
+      previous.audioCover !== profile.audioCover
+    ) {
+      removeUploadedCover(previous.audioCover);
     }
 
     res.json({
       ok: true,
       profile,
       avatarUrl: avatarUrlFor(profile),
+      backgroundUrl: backgroundUrlFor(profile),
       audioUrl: audioUrlFor(profile),
+      coverUrl: coverUrlFor(profile),
     });
   } catch (error) {
     uploadedPaths.forEach((uploadedPath) => {
@@ -270,14 +418,27 @@ app.post('/api/avatar/remove', (req, res, next) => {
     const previous = loadProfile();
     const profile = saveProfile({ avatar: null });
 
-    if (previous.avatar) {
-      removeUploadedAvatar(previous.avatar);
+    if (previous.avatar) removeUploadedAvatar(previous.avatar);
+
+    res.json({ ok: true, profile, avatarUrl: avatarUrlFor(profile) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/background/remove', (req, res, next) => {
+  try {
+    const previous = loadProfile();
+    const profile = saveProfile({ backgroundImage: null });
+
+    if (previous.backgroundImage) {
+      removeUploadedBackground(previous.backgroundImage);
     }
 
     res.json({
       ok: true,
       profile,
-      avatarUrl: avatarUrlFor(profile),
+      backgroundUrl: backgroundUrlFor(profile),
     });
   } catch (error) {
     next(error);
@@ -289,17 +450,112 @@ app.post('/api/audio/remove', (req, res, next) => {
     const previous = loadProfile();
     const profile = saveProfile({ audio: null });
 
-    if (previous.audio) {
-      removeUploadedAudio(previous.audio);
+    if (previous.audio) removeUploadedAudio(previous.audio);
+
+    res.json({ ok: true, profile, audioUrl: audioUrlFor(profile) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/cover/remove', (req, res, next) => {
+  try {
+    const previous = loadProfile();
+    const profile = saveProfile({ audioCover: null });
+
+    if (previous.audioCover) removeUploadedCover(previous.audioCover);
+
+    res.json({ ok: true, profile, coverUrl: coverUrlFor(profile) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/views', (req, res, next) => {
+  try {
+    const requested = sanitizeViewUsername(req.body && req.body.username);
+    const username = requested || sanitizeViewUsername(loadProfile().username);
+    const views = incrementViews(username);
+    res.json({ ok: true, views });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/views', (req, res, next) => {
+  try {
+    const requested = sanitizeViewUsername(req.query.username);
+    const username = requested || sanitizeViewUsername(loadProfile().username);
+    res.json({ ok: true, views: getViews(username) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Proxy a Lanyard lookup so the admin can explain why a presence badge is
+ * missing. Lanyard only tracks users who joined its Discord server, so a
+ * `user_not_monitored` response is expected until the owner does that.
+ */
+app.get('/api/discord', async (req, res) => {
+  const id = String(req.query.id || '').trim();
+
+  if (!/^\d{17,20}$/.test(id)) {
+    res.status(400).json({
+      ok: false,
+      reason: 'invalid_id',
+      error: 'Discord ID должен состоять из 17–20 цифр.',
+    });
+    return;
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch(
+      `https://api.lanyard.rest/v1/users/${encodeURIComponent(id)}`,
+      {
+        signal: controller.signal,
+        headers: { accept: 'application/json' },
+      },
+    );
+
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+
+    if (response.ok && payload && payload.success && payload.data) {
+      res.json({ ok: true, data: payload.data });
+      return;
+    }
+
+    const code = payload && payload.error && payload.error.code;
+    if (response.status === 404 && code === 'user_not_monitored') {
+      res.json({
+        ok: false,
+        reason: 'not_monitored',
+        error: 'Lanyard не отслеживает этот аккаунт. Зайдите на discord.gg/lanyard.',
+      });
+      return;
     }
 
     res.json({
-      ok: true,
-      profile,
-      audioUrl: audioUrlFor(profile),
+      ok: false,
+      reason: 'unavailable',
+      error: 'Lanyard временно недоступен. Попробуйте позже.',
     });
-  } catch (error) {
-    next(error);
+  } catch {
+    res.json({
+      ok: false,
+      reason: 'unavailable',
+      error: 'Не удалось связаться с Lanyard. Проверьте интернет.',
+    });
+  } finally {
+    clearTimeout(timer);
   }
 });
 
@@ -338,13 +594,16 @@ app.use((error, req, res, next) => {
   } else if (error instanceof multer.MulterError) {
     status = 400;
     if (error.code === 'LIMIT_FILE_SIZE') {
-      message = 'Файл слишком большой. Максимум — 5 МБ.';
+      message = 'Файл слишком большой. Максимум — 12 МБ.';
     } else if (error.code === 'LIMIT_UNEXPECTED_FILE') {
       message = 'Неожиданное поле загрузки файла.';
     } else {
       message = `Ошибка загрузки файла: ${error.message}`;
     }
-  } else if (error.code === 'INVALID_FILE_TYPE' || error.code === 'INVALID_AUDIO_TYPE') {
+  } else if (
+    error.code === 'INVALID_FILE_TYPE' ||
+    error.code === 'INVALID_AUDIO_TYPE'
+  ) {
     status = 400;
     message = error.message;
   } else {

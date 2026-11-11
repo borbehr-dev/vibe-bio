@@ -3,10 +3,13 @@ node_modules/
 
 # user data (created automatically on first launch)
 data/profile.json
+data/views.json
 
-# uploaded avatars and music (default-avatar.svg is tracked)
+# uploaded media (default-avatar.svg is tracked)
 assets/avatar-*
+assets/bg-*
 assets/music-*
+assets/cover-*
 
 # generated static site (build on demand)
 dist/
